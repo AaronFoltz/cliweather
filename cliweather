@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+from xml.dom.minidom import parseString
+try:
+    from urllib.request import urlopen
+except ImportError:
+    from urllib import urlopen
+try:
+    from urllib.parse import urlencode
+except ImportError:
+    from urllib import urlencode
+from sys import argv, exit, stderr
+from os.path import expanduser
+
+VERSION = '.01'
+URL = 'http://www.aaronfoltz.com'
+
+config = expanduser('~/.config/cliweather')
+
+try:
+    place = argv[1]
+except IndexError:
+    try:
+        import re
+        # Get the geoip information
+        geoip = urlopen('http://api.ipinfodb.com/v3/ip-city/?key=29e619f84fd83f32c4987573a4ccc11fd59b268234aa50c1289230f1fff0dbd2').read()
+        
+        # The returned value is perfectly fine
+        if re.match("OK;;", geoip):
+            
+            # regex to get the zip code
+            expression = "OK;;([^;]+;){5}(\w+)"
+            
+            result = re.search(expression, geoip)
+            
+            # Get the zip code from the returned data
+            place = result.group(2)
+    except (ImportError, IndexError):
+        try:
+            place = open(config, 'r').read()
+        except IOError:
+            stderr.write('No location given, failed to guess location and nothing defined in %s\n' % config)
+            exit(1)
+
+
+api = 'http://www.google.com/ig/api?%s' % urlencode({'weather': place})
+
+dom = parseString(urlopen(api).read())
+
+items = [ 'city'
+        , 'condition'
+        , 'temp_f'
+        , 'temp_c'
+        , 'humidity'
+        , 'wind_condition' ]
+info = {}
+try:
+    for item in items:
+        info[item] = dom.getElementsByTagName(item)[0].getAttribute('data')
+except IndexError:
+    stderr.write('Invalid Area\n')
+    exit(1)
+
+print('City: %s' % info['city'])
+print('Condition: %s' % info['condition'])
+print('Temperature: %sC/%sF' % (info['temp_c'], info['temp_f']))
+print(info['humidity'])
+print(info['wind_condition'])
