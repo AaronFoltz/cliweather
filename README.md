@@ -25,6 +25,10 @@ To see the current conditions, no flag is needed:
 
 	weather
 
-if you want to include your zip code:
+If you want to include your zip code:
 	
 	weather 20171
+
+If you want to set a default location:
+
+  echo "20171" > ~/.cliweather

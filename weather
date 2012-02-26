@@ -9,7 +9,8 @@ try:
 except ImportError:
     from urllib import urlencode
 from sys import argv, exit, stderr
-from os.path import expanduser
+import os.path
+
 
 VERSION = '.01'
 URL = 'http://www.aaronfoltz.com'
@@ -101,12 +102,24 @@ def getForecast(place):
     # Print out the information for each day
     for day in range(1, len(days)+1):
         print('Day: %s' % info[day][0])
-        print('\tHigh: %s' % info[day][1])
-        print('\tLow: %s' % info[day][2])
+        print('\tHigh: %dC/%sF' % (fahToCel(info[day][1]), info[day][1]))
+        print('\tLow: %dC/%sF' % (fahToCel(info[day][2]), info[day][2]))
         print('\tCondition: %s' % info[day][3])
             
+def fahToCel(value):
+    return (100.0/(212-32)) * (int(value) - 32)
+
 def getPlace():
     import re
+
+    path = "%s/.cliweather" % os.getenv("HOME")
+    if os.path.exists(path):
+        try:
+            f = open(path, 'r')
+            return f.read()
+        except:
+            print "Could not load .cliweather"
+
     # Get the geoip information
     geoip = urlopen('http://api.ipinfodb.com/v3/ip-city/?key=29e619f84fd83f32c4987573a4ccc11fd59b268234aa50c1289230f1fff0dbd2').read()
     
