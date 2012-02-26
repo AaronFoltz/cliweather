@@ -9,7 +9,8 @@ try:
 except ImportError:
     from urllib import urlencode
 from sys import argv, exit, stderr
-from os.path import expanduser
+import os.path
+
 
 VERSION = '.01'
 URL = 'http://www.aaronfoltz.com'
@@ -107,6 +108,15 @@ def getForecast(place):
             
 def getPlace():
     import re
+
+    path = "%s/.cliweather" % os.getenv("HOME")
+    if os.path.exists(path):
+        try:
+            f = open(path, 'r')
+            return f.read()
+        except:
+            print "Could not load .cliweather"
+
     # Get the geoip information
     geoip = urlopen('http://api.ipinfodb.com/v3/ip-city/?key=29e619f84fd83f32c4987573a4ccc11fd59b268234aa50c1289230f1fff0dbd2').read()
     
