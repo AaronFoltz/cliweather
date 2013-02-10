@@ -8,12 +8,15 @@ try:
     from urllib.parse import urlencode
 except ImportError:
     from urllib import urlencode
-from sys import argv, exit, stderr
+from sys import argv, exit, stderr, stdout
 import os.path
-
+import datetime
 
 VERSION = '.01'
 URL = 'http://www.aaronfoltz.com'
+YAHOO_API_KEY = 'dj0yJmk9TEdTT09FNVp6MWlhJmQ9WVdrOVpsaGhVbEZTTmpJbWNHbzlOalUyT0RNMk1qWXkmcz1jb25zdW1lcnNlY3JldCZ4PTkw'
+WOEID_URL = 'http://where.yahooapis.com/v1/places.q({0})?'
+YAHOO_API_URL = 'http://weather.yahooapis.com/forecastrss?'
 
 def main():
     try:
@@ -23,7 +26,7 @@ def main():
             try:
                 place = argv[2]
                 getForecast(place)
-    
+
             # If no zip is provided, get it from the geolocation service
             except IndexError:
                 place = getPlace()
@@ -41,74 +44,50 @@ def main():
     except IndexError:
         place = getPlace()
         getCurrent(place)
-    
+
+
 def getCurrent(place):
+
+    woeid = getWOEID(place)
+
     # Call to get the weather
-    api = 'http://www.google.com/ig/api?%s' % urlencode({'weather': place})
+    api = YAHOO_API_URL + urlencode({'w': woeid})
     dom = parseString(urlopen(api).read())
 
-    items = [ 'city'
-            , 'condition'
-            , 'temp_f'
-            , 'temp_c'
-            , 'humidity'
-            , 'wind_condition' ]
-    info = {}
-    try:
-        for item in items:
-            info[item] = dom.getElementsByTagName(item)[0].getAttribute('data')
-            
-    except IndexError:
-        stderr.write('Invalid Area\n')
-        exit(1)
+    # Get the necessary DOM elements
+    location = dom.getElementsByTagName('yweather:location')[0]
+    currentConditions = dom.getElementsByTagName('yweather:condition')[0]
+    atmosphere = dom.getElementsByTagName('yweather:atmosphere')[0]
+    wind = dom.getElementsByTagName('yweather:wind')[0]
 
-    print('City: %s' % info['city'])
-    print('Condition: %s' % info['condition'])
-    print('Temperature: %sC/%sF' % (info['temp_c'], info['temp_f']))
-    print(info['humidity'])
-    print(info['wind_condition'])
+    print
+    print('Location: %s, %s' % (location.getAttribute("city"), location.getAttribute("region")))
+    print('Condition: %s' % currentConditions.getAttribute("text"))
+    print('Temperature: %sF/%sC' % (currentConditions.getAttribute("temp"), fahToCel(currentConditions.getAttribute("temp"))))
+    print('Humidity: %s' % atmosphere.getAttribute('humidity') + "%")
+    print('Wind: %s mph %s' % (wind.getAttribute("speed"), degToCompass(wind.getAttribute("direction"))))
 
 def getForecast(place):
-    api = 'http://www.google.com/ig/api?%s' % urlencode({'weather': place})
+
+    woeid = getWOEID(place)
+
+    # Call to get the weather
+    api = YAHOO_API_URL + urlencode({'w': woeid})
     dom = parseString(urlopen(api).read())
-    # Information that we can get in the forecast
-    items = [ 'day_of_week'
-            , 'high'
-            , 'low'
-            , 'condition']
 
-    # A main of information with 4 sublists - one for each day in the forecast
-    info = []
-    
-    # Add city to the list
-    info.insert(0, dom.getElementsByTagName('city')[0].getAttribute('data'))
+    # Get the necessary DOM elements
+    forecasts = dom.getElementsByTagName('yweather:forecast')
 
-    # Gather the number of days 
-    days = dom.getElementsByTagName('day_of_week')
-    
-    # Gather the information for each day
-    for day in range(1, len(days)+1):
-        
-        # Add a sublist for the day
-        info.append([])
-        
-        # Gather the available information for each day in the forecast
-        for item in items:
-            # Add the information to the end of the sublist for the day
-            info[day].append(dom.getElementsByTagName(item)[day-1].getAttribute('data'))
-    
-    print('City: %s' % info[0])
-    
-    # Print out the information for each day
-    for day in range(1, len(days)+1):
-        print('Day: %s' % info[day][0])
-        print('\tHigh: %dC/%sF' % (fahToCel(info[day][1]), info[day][1]))
-        print('\tLow: %dC/%sF' % (fahToCel(info[day][2]), info[day][2]))
-        print('\tCondition: %s' % info[day][3])
-            
-def fahToCel(value):
-    return (100.0/(212-32)) * (int(value) - 32)
+    print
 
+    # Print info for each forecast day
+    for day in forecasts:
+        print('Day: %s' % datetime.datetime.strptime(day.getAttribute('date'), '%d %b %Y').strftime('%A, %B %d, %Y'))
+        print('\tHigh: %sF/%sC' % (day.getAttribute("high"), fahToCel(day.getAttribute("high"))))
+        print('\tLow: %sF/%sC' % (day.getAttribute("low"), fahToCel(day.getAttribute("low"))))
+        print('\tCondition: %s' % day.getAttribute('text'))
+
+# Retrives zip code if not entered
 def getPlace():
     import re
 
@@ -122,17 +101,37 @@ def getPlace():
 
     # Get the geoip information
     geoip = urlopen('http://api.ipinfodb.com/v3/ip-city/?key=29e619f84fd83f32c4987573a4ccc11fd59b268234aa50c1289230f1fff0dbd2').read()
-    
+
     # The returned value is perfectly fine
     if re.match("OK;;", geoip):
-        
+
         # regex to get the zip code
         expression = "OK;;([^;]+;){5}(\w+)"
-        
+
         result = re.search(expression, geoip)
-        
+
         # return the zip code from the returned data
         return result.group(2)
+
+# Make a call to Yahoo's API to get the WOEID given a zip code
+def getWOEID(place):
+    # Make the call to the API to return the XML with WOEID
+    api = (WOEID_URL + urlencode({'appid': YAHOO_API_KEY})).format(place)
+    dom = parseString(urlopen(api).read())
+
+    # Return parsed WOEID
+    return dom.getElementsByTagName('woeid')[0].firstChild.data
+
+# Convert Fah to Cel
+def fahToCel(value):
+    return '{0:.0f}'.format((100.0/(212-32)) * (int(value) - 32))
+
+# From http://stackoverflow.com/questions/7490660/converting-wind-direction-in-angles-to-text-words
+def degToCompass(num):
+    num = int(num)
+    val=int((num / 22.5) + .5)
+    arr=["N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
+    return arr[(val % 16)]
 
 if __name__ == "__main__":
     main()
